@@ -13,12 +13,27 @@ An interactive Tableau analysis of how education and employment changed across E
 
 ## Findings
 
-- The share of residents with **Level 4 qualifications and above rose markedly**, while the share with no qualifications fell.
-- **Full-time employment grew and unemployment fell** over the decade.
-- Professional, education, technology and healthcare employment expanded, most visibly in regions with higher qualification levels. Manufacturing declined.
-- A **north-south gap** is visible in qualification growth, and regions with slower educational progress stayed tied to lower-growth industries.
+- **Qualifications rose.** Level 4 and above grew from 27.2% to 33.8% of residents, while those with no qualifications fell from 22.7% to 18.2%.
+- **Unemployment fell.** Unemployed residents dropped from 1.8 million to 1.4 million, and employment grew in both full-time and part-time work.
+- **Industry mix shifted.** Human health and social work (+2.2 percentage points of employment), construction and information and communication grew, while manufacturing (-1.6), wholesale and retail, and accommodation and food declined.
+- **Regional pattern.** The report finds a north-south gap in qualification growth, with regions that progressed more slowly staying tied to lower-growth industries.
 
-The full discussion is in [`report/report.pdf`](report/report.pdf).
+The full discussion is in [`report/report.pdf`](report/report.pdf). Figures above are shares of the England and Wales totals computed from the processed data.
+
+## Preview charts
+
+Static previews of the main views, generated from the processed data by [`src/make_previews.py`](src/make_previews.py). The interactive dashboards, including the choropleth maps, are in the Tableau workbook.
+
+![Highest level of qualification, 2011 vs 2021](docs/images/01-qualifications.png)
+
+![Economic activity, 2011 vs 2021](docs/images/02-economic-activity.png)
+
+![Change in industry employment share](docs/images/03-industry-change.png)
+
+<p>
+  <img src="docs/images/04-pca-industry.png" alt="PCA of industry employment" width="49%">
+  <img src="docs/images/05-tsne-qualification.png" alt="t-SNE of qualifications" width="49%">
+</p>
 
 ## Dashboards
 
@@ -42,7 +57,10 @@ Chart choices (grouped and stacked bars, choropleth maps, trend lines, PCA and t
 │   ├── raw/                                  ONS census extracts (2011, 2021) and area-code lookup
 │   └── processed/combined_sheets.xlsx        Pipeline output used by Tableau
 ├── report/report.pdf                         Full written report
-├── src/prepare_data.py                       Data preparation pipeline
+├── docs/images/                              Preview charts
+├── src/
+│   ├── prepare_data.py                       Data preparation pipeline
+│   └── make_previews.py                      Preview chart generator
 ├── requirements.txt
 └── LICENSE
 ```
@@ -74,16 +92,19 @@ This writes `data/processed/combined_sheets.xlsx` with five sheets:
 | industry employment pca | Wide industry counts plus `PCA1`, `PCA2` |
 | Highest qualification tsne | Wide qualification counts plus `TSNE1`, `TSNE2` |
 
+To regenerate the preview charts, run `python src/make_previews.py`.
+
 On Windows, activate the environment with `.venv\Scripts\activate`.
 
 ## Method
 
 1. **Read** each Nomis export, skipping the seven metadata rows and the trailing footnotes.
-2. **Harmonise area codes** from 2011 to 2021 Local Authority codes using the ONS lookup table.
-3. **Align categories**: rename 2021 columns to the 2011 naming, drop unmatched columns, add a `Year` column and concatenate the two years.
-4. **Impute missing values.** The 2011 qualification data has gaps in `Apprenticeship` and `Other qualifications`. A Bayesian Ridge regression, trained on rows with complete data and using the other numeric columns as features, predicts them. Predictions are clipped at zero because the values are counts.
-5. **Reshape** to long format for Tableau.
-6. **Embed**: standardise, then PCA (2 components) on industry employment and t-SNE (perplexity 30, `random_state=42`) on qualifications.
+2. **Keep England and Wales only** (area codes starting `E` or `W`).
+3. **Harmonise area codes** from 2011 to 2021 Local Authority codes using the ONS lookup table.
+4. **Align categories**: rename 2021 columns to the 2011 naming, drop unmatched columns, add a `Year` column and concatenate the two years.
+5. **Impute missing values.** Gaps in the 2011 `Apprenticeship` and `Other qualifications` counts are filled with a Bayesian Ridge regression, trained on complete rows with the other numeric columns as features and clipped at zero because the values are counts. In the supplied extract the only gaps belong to Aberdeen City, which is outside England and Wales and is excluded, so the step acts as a safeguard for other extracts.
+6. **Reshape** to long format for Tableau.
+7. **Embed**: standardise, then PCA (2 components) on industry employment and t-SNE (perplexity 30, `random_state=42`) on qualifications.
 
 ## Data
 
@@ -95,11 +116,12 @@ Population counts by Local Authority from the Office for National Statistics, Ce
 - Mapping boundaries use 2011 definitions. Some 2021 area codes no longer match and appear as "unknown" on the 2021 maps.
 - The 2011 imputation is a statistical estimate, not observed data.
 - The evaluation was small (five participants) and informal.
+- `Year` is one of the numeric features in the PCA and t-SNE steps, so the two census years separate visibly in the t-SNE view.
 - The t-SNE layout depends on the library version, so regenerated coordinates can differ slightly from those packaged in the workbook.
 
 ## Tools
 
-Python (pandas, scikit-learn, openpyxl), Tableau Public.
+Python (pandas, scikit-learn, matplotlib, openpyxl), Tableau Public.
 
 ## License
 

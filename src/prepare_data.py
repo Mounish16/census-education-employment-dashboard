@@ -74,7 +74,9 @@ def read_ons(path: Path, trailing_rows: int, sheet: str = "Data") -> pd.DataFram
     df = pd.read_excel(path, sheet_name=sheet, skiprows=7)
     if trailing_rows:
         df = df.iloc[:-trailing_rows]
-    return df.rename(columns={df.columns[0]: "Region", df.columns[1]: "Area Code"})
+    df = df.rename(columns={df.columns[0]: "Region", df.columns[1]: "Area Code"})
+    # Keep England and Wales only (codes starting E or W); drops stray rows.
+    return df[df["Area Code"].astype(str).str.match(r"^[EW]\d")]
 
 
 def load_lookup(path: Path) -> pd.DataFrame:
@@ -99,7 +101,12 @@ def prepare_economic_activity(raw: Path, lookup: pd.DataFrame) -> pd.DataFrame:
 
 
 def impute_qualifications_2011(raw: Path) -> pd.DataFrame:
-    """Fill missing 2011 'Apprenticeship' and 'Other qualifications' counts."""
+    """Fill any missing 2011 'Apprenticeship' / 'Other qualifications' counts.
+
+    In the supplied extract the only gaps belong to Aberdeen City, which is
+    outside England and Wales and removed by `read_ons`. The imputation is kept
+    as a safeguard so the pipeline also handles extracts that do have gaps.
+    """
     df = read_ons(raw / "2011" / "highest_qualification.xlsx", trailing_rows=60)
     df = df.replace("-", pd.NA)
     targets = ["Apprenticeship", "Other qualifications"]
@@ -111,6 +118,8 @@ def impute_qualifications_2011(raw: Path) -> pd.DataFrame:
     for col in targets:
         y = pd.to_numeric(df[col], errors="coerce")
         known = y.notna()
+        if known.all():
+            continue
         model = BayesianRidge().fit(scaled[known], y[known])
         df.loc[~known, col] = model.predict(scaled[~known]).clip(min=0)
     return df
